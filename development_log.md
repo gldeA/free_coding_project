@@ -1,0 +1,2 @@
+- Mar 24: 45 mins: setting up raylib for Rust
+- Mar 31: 30 mins: Finished Vector2i struct implementation

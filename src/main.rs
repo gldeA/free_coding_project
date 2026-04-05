@@ -1,12 +1,39 @@
 use std::{fmt, ops::{Add, Index, IndexMut, Sub}};
-use raylib::math::Vector2;
+use raylib::{RaylibHandle, color::Color, ffi::ConfigFlags, math::Vector2, prelude::{RaylibDraw, RaylibDrawHandle}};
 
 mod particles;
 
 use crate::particles::particles::{Particle};
 
 fn main() {
-	
+	let (mut handle, thread) = raylib::init()
+		.resizable()
+		.size(800, 600)
+		.title("Particle Simulator")
+		.build();
+
+	let mut grid = Grid::new(5, 5, 50);
+
+	while !handle.window_should_close() {
+		let width = handle.get_screen_width();
+		let height = handle.get_screen_height();
+
+		if handle.is_window_resized() { grid.resize(&handle); }
+
+		let mut draw_handle = handle.begin_drawing(&thread);
+		draw_handle.clear_background(Color::WHITE);
+
+		draw_handle.draw_text(
+			&format!("{} x {}", width, height),
+			10,
+			10,
+			20,
+			Color::BLACK,
+		);
+
+
+		grid.draw(&mut draw_handle);
+	}
 }
 
 struct Grid {
@@ -27,8 +54,22 @@ impl Grid {
 	fn set<P: Particle + 'static>(&mut self, position: Vector2i, value: P) {
 		self.vector[(position.y * self.width as i32 + position.x) as usize] = Some(Box::new(value));
 	}
-	fn draw(&self) {
-		// TODO: Implement
+	fn draw(&self, draw_handle: &mut RaylibDrawHandle) {
+		let screen_error = self.get_screen_error(draw_handle);
+		let screen_size = Vector2i::new(draw_handle.get_screen_width(), draw_handle.get_screen_height());
+		draw_handle.draw_line(screen_error.x, screen_error.y, screen_size.x - screen_error.x, screen_error.y, Color::BLACK);
+		draw_handle.draw_line(screen_error.x, screen_error.y, screen_error.x, screen_size.y - screen_error.y, Color::BLACK);
+		draw_handle.draw_line(screen_size.x - screen_error.x, screen_error.y, screen_size.x - screen_error.x, screen_size.y - screen_error.y, Color::BLACK);
+		draw_handle.draw_line(screen_error.x, screen_size.y - screen_error.y, screen_size.x - screen_error.x, screen_size.y - screen_error.y, Color::BLACK);
+	}
+	fn get_grid_size(&self) -> u8 { self.grid_size }
+	fn get_screen_error(&self, handle: &RaylibHandle) -> Vector2i {
+		Vector2i::new((handle.get_screen_width() - (self.width as i32 * self.grid_size as i32)) / 2, (handle.get_screen_height() - (self.height as i32 * self.grid_size as i32)) / 2)
+	}
+	fn resize(&mut self, handle: &RaylibHandle) {
+		self.height = (handle.get_screen_height() / self.grid_size as i32) as u16;
+		self.width = (handle.get_screen_width() / self.grid_size as i32) as u16;
+		self.vector.resize_with(((self.height as usize * self.grid_size as usize) * (self.width as usize * self.grid_size as usize)) as usize, || None);
 	}
 }
 

@@ -1,2 +1,3 @@
-- Mar 24: 45 mins: setting up raylib for Rust
-- Mar 31: 30 mins: Finished Vector2i struct implementation
+- Mar 24: 0.75 hours: setting up raylib for Rust
+- Mar 31: 0.5 hours: Finished Vector2i struct implementation
+- Apr 4: 1.5 hours: continued implementation of Particle trait and Sand struct, added Grid struct.

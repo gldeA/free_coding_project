@@ -1,9 +1,11 @@
-use std::{fmt, ops::{Add, Index, IndexMut, Sub}};
+use std::{fmt, time, ops::{Add, Index, IndexMut, Sub}};
 use raylib::{RaylibHandle, color::Color, ffi::ConfigFlags, math::Vector2, prelude::{RaylibDraw, RaylibDrawHandle}};
 
 mod particles;
 
 use crate::particles::particles::{Particle, Sand};
+
+const TICK_RATE: time::Duration = time::Duration::from_millis(0);
 
 fn main() {
 	let (mut handle, thread) = raylib::init()
@@ -12,17 +14,29 @@ fn main() {
 		.title("Particle Simulator")
 		.build();
 
-	let mut grid = Grid::new(50);
+	let mut grid = Grid::new(3);
+	let mut prev_tick = time::Instant::now();
 
 	while !handle.window_should_close() {
 		if handle.is_window_resized() { grid.resize(&handle); }
-		if handle.is_mouse_button_down(raylib::ffi::MouseButton::MOUSE_BUTTON_RIGHT) { grid.set_screen_relative(handle.get_mouse_position(), None, &handle); }
-		if handle.is_mouse_button_down(raylib::ffi::MouseButton::MOUSE_BUTTON_LEFT) { grid.set_screen_relative(handle.get_mouse_position(), Some(Box::new(Sand::new())), &handle); }
 
-		let mut draw_handle = handle.begin_drawing(&thread);
-		draw_handle.clear_background(Color::WHITE);
+		if handle.is_mouse_button_down(raylib::ffi::MouseButton::MOUSE_BUTTON_RIGHT) && handle.is_cursor_on_screen() {
+			grid.set_screen_relative(handle.get_mouse_position(), None, &handle);
+		}
+		if handle.is_mouse_button_down(raylib::ffi::MouseButton::MOUSE_BUTTON_LEFT) && handle.is_cursor_on_screen() {
+			grid.set_screen_relative(handle.get_mouse_position(), Some(Box::new(Sand::new())), &handle);
+		}
 
-		grid.draw(&mut draw_handle);
+		if time::Instant::now().checked_duration_since(prev_tick).unwrap() >= TICK_RATE {
+			prev_tick = time::Instant::now();
+
+			grid.update();
+
+			let mut draw_handle = handle.begin_drawing(&thread);
+			draw_handle.clear_background(Color::WHITE);
+
+			grid.draw(&mut draw_handle);
+		}
 	}
 }
 
@@ -37,18 +51,29 @@ impl Grid {
 		Self { vector: Vec::new(), height: 0, width: 0, grid_size }
 	}
 
+	fn is_in_bounds(&self, position: Vector2i) -> bool {
+		!(position.x < 0 || position.y < 0 || position.x >= self.width as i32 || position.y >= self.height as i32)
+	}
+
 	fn get(&self, position: Vector2i) -> Option<&dyn Particle> {
+		if position.x < 0 || position.y < 0 || position.x >= self.width as i32 || position.y >= self.height as i32 { return None; }
 		self.vector[(position.y * self.width as i32 + position.x) as usize].as_deref()
 	}
 	
 	fn set(&mut self, position: Vector2i, value: Option<Box<dyn Particle>>) {
-		self.vector[(position.y * self.width as i32 + position.x) as usize] = value;
+		if self.is_in_bounds(position) { self.vector[(position.y * self.width as i32 + position.x) as usize] = value; }
+		else { panic!("ERROR: Tried to set position {position}! Grid is only {} x {}.", self.width, self.height); }
 	}
 
+	fn move_item(&mut self, initial_position: Vector2i, final_position: Vector2i) {
+		let particle = self.vector[(initial_position.y * self.width as i32 + initial_position.x) as usize].take();
+		self.set(final_position, particle);
+	}
+	
 	fn set_screen_relative(&mut self, position: Vector2, particle: Option<Box<dyn Particle>>, handle: &RaylibHandle) {
 		let screen_error = self.get_screen_error(handle);
-		let x = (position.x.round() as i32 - screen_error.x) / self.grid_size as i32;
-		let y = (position.y.round() as i32 - screen_error.y) / self.grid_size as i32;
+		let x = ((position.x.round() as i32 - screen_error.x) / self.grid_size as i32).clamp(0, self.width as i32 - 1);
+		let y = ((position.y.round() as i32 - screen_error.y) / self.grid_size as i32).clamp(0, self.height as i32 - 1);
 		self.set(Vector2i::new(x, y), particle);
 	}
 
@@ -69,8 +94,6 @@ impl Grid {
 		}
 	}
 
-	fn get_grid_size(&self) -> usize { self.grid_size }
-
 	fn get_screen_error(&self, handle: &RaylibHandle) -> Vector2i {
 		Vector2i::new((handle.get_screen_width() - (self.width * self.grid_size) as i32) / 2, (handle.get_screen_height() - (self.height * self.grid_size) as i32) / 2)
 	}
@@ -79,6 +102,20 @@ impl Grid {
 		self.height = handle.get_screen_height() as usize / self.grid_size;
 		self.width = handle.get_screen_width() as usize / self.grid_size;
 		self.vector.resize_with(self.height * self.width, || None);
+	}
+
+	fn flat_index_to_2d(&self, index: usize) -> Vector2i {
+		Vector2i::new((index % self.width) as i32, (index / self.width) as i32)
+	}
+
+	fn update(&mut self) {
+		let mut particle_position_updates = Vec::new();
+		for (i, particle) in self.vector.iter().enumerate() {
+			if particle.is_some() { particle_position_updates.push((self.flat_index_to_2d(i), particle.as_ref().unwrap().update_position(self.flat_index_to_2d(i), self))); }
+		}
+		for update in particle_position_updates {
+			self.move_item(update.0, update.1);
+		}
 	}
 }
 

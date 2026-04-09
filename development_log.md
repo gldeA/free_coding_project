@@ -2,4 +2,4 @@
 - Mar 31: 0.5 hours: Finished Vector2i struct implementation
 - Apr 4: 2.75 hours: continued implementation of Particle trait and Sand struct, added Grid struct. Added basic drawing and automatic grid resizing.
 - Apr 7: 1 hour: Implemented drawing particles to the screen with the mouse. Still needs physics and more particle types.
-- Apr 8: 1.5 hours: Implemented sand physics
+- Apr 8: 3 hours: Implemented sand physics, added balloons and rocks, fixed bugs
